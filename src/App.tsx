@@ -274,6 +274,7 @@ export default function App() {
             onUpdateWallet={handleUpdateWallet}
             wallets={wallets}
             onSelectWallet={setSelectedWalletAddress}
+            trades={trades}
           />
         </div>
 

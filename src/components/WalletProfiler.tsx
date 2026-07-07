@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { Star, FileText, TrendingUp, TrendingDown, Clock, ShieldAlert, Check, Coins } from "lucide-react";
-import { WalletProfile } from "../types";
+import { Star, FileText, TrendingUp, TrendingDown, Clock, ShieldAlert, Check, Coins, Flame, Zap } from "lucide-react";
+import { WalletProfile, WhaleTrade } from "../types";
 
 interface WalletProfilerProps {
   selectedWallet: WalletProfile | null;
   onUpdateWallet: (address: string, isBookmarked: boolean, notes: string) => void;
   wallets: WalletProfile[];
   onSelectWallet: (address: string) => void;
+  trades: WhaleTrade[];
 }
 
 export default function WalletProfiler({
@@ -14,9 +15,12 @@ export default function WalletProfiler({
   onUpdateWallet,
   wallets,
   onSelectWallet,
+  trades = [],
 }: WalletProfilerProps) {
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [tempNotes, setTempNotes] = useState("");
+  const [sidebarTab, setSidebarTab] = useState<"watchlist" | "smart" | "all">("watchlist");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const bookmarkedWallets = wallets.filter((w) => w.isBookmarked);
 
@@ -27,6 +31,58 @@ export default function WalletProfiler({
     if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(0)}k`;
     return `${sign}$${abs.toFixed(0)}`;
   };
+
+  // Helper to calculate 24h stats for a wallet
+  const getWallet24hStats = (address: string) => {
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const walletTrades = trades.filter(
+      (t) =>
+        t.walletAddress.toLowerCase() === address.toLowerCase() &&
+        t.timestamp >= oneDayAgo
+    );
+
+    if (walletTrades.length === 0) {
+      return {
+        tradesCount: 0,
+        winRate: null,
+        pnl: 0,
+        isSmart: false,
+      };
+    }
+
+    const winningTrades = walletTrades.filter((t) => t.pnlUsd > 0).length;
+    const winRate = (winningTrades / walletTrades.length) * 100;
+    const pnl = walletTrades.reduce((sum, t) => sum + t.pnlUsd, 0);
+
+    return {
+      tradesCount: walletTrades.length,
+      winRate: parseFloat(winRate.toFixed(1)),
+      pnl,
+      isSmart: winRate >= 70,
+    };
+  };
+
+  // Compile smart wallets based on the last 24 hours (win rate >= 70%)
+  const smartWalletsWithStats = wallets
+    .map((w) => {
+      const stats24h = getWallet24hStats(w.walletAddress);
+      return {
+        wallet: w,
+        stats24h,
+      };
+    })
+    .filter((item) => item.stats24h.isSmart);
+
+  // Sort smart wallets by win rate descending
+  smartWalletsWithStats.sort((a, b) => {
+    const wrA = a.stats24h.winRate ?? 0;
+    const wrB = b.stats24h.winRate ?? 0;
+    if (wrB !== wrA) return wrB - wrA;
+    return b.stats24h.tradesCount - a.stats24h.tradesCount;
+  });
+
+  const selectedStats24h = selectedWallet ? getWallet24hStats(selectedWallet.walletAddress) : null;
 
   const handleNotesSave = () => {
     if (selectedWallet) {
@@ -53,64 +109,185 @@ export default function WalletProfiler({
           Bookmarked institutional wallets and active watchlists
         </p>
 
-        {bookmarkedWallets.length === 0 ? (
-          <div className="text-center py-8 bg-brand-hover/50 border border-brand-border-secondary rounded-sm border-dashed text-brand-text-secondary text-xs font-mono">
-            No wallets bookmarked yet. Click the star icon on any profile to begin tracking!
-          </div>
-        ) : (
-          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-            {bookmarkedWallets.map((w) => (
-              <div
-                key={w.walletAddress}
-                onClick={() => onSelectWallet(w.walletAddress)}
-                className={`p-3 rounded-sm border text-left cursor-pointer transition ${
-                  selectedWallet?.walletAddress === w.walletAddress
-                    ? "bg-brand-accent/5 border-brand-accent/30"
-                    : "bg-brand-hover/30 border-brand-border hover:border-brand-border-secondary"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-sans font-semibold text-xs text-white block">
-                    {w.walletLabel}
-                  </span>
-                  <Star className="w-3.5 h-3.5 text-brand-accent fill-brand-accent" />
-                </div>
-                <div className="flex items-center justify-between mt-1 text-[10px] font-mono">
-                  <span className="text-brand-text-secondary">
-                    {w.walletAddress.substring(0, 6)}...{w.walletAddress.slice(-4)}
-                  </span>
-                  <span className={w.realizedPnl >= 0 ? "text-brand-accent" : "text-brand-accent-red"}>
-                    PnL: {formatUsd(w.realizedPnl)}
-                  </span>
-                </div>
-              </div>
-            ))}
+        {/* Tab Selection */}
+        <div className="flex bg-brand-hover p-0.5 border border-brand-border-secondary rounded-sm text-xs font-mono mb-4">
+          <button
+            onClick={() => setSidebarTab("watchlist")}
+            className={`flex-1 py-1.5 rounded-sm text-center cursor-pointer transition font-bold uppercase tracking-wider ${
+              sidebarTab === "watchlist"
+                ? "bg-brand-border-secondary text-brand-accent"
+                : "text-brand-text-secondary hover:text-brand-text-primary"
+            }`}
+          >
+            Watchlist
+          </button>
+          <button
+            onClick={() => setSidebarTab("smart")}
+            className={`flex-1 py-1.5 rounded-sm text-center cursor-pointer transition font-bold uppercase tracking-wider relative ${
+              sidebarTab === "smart"
+                ? "bg-brand-border-secondary text-brand-accent"
+                : "text-brand-text-secondary hover:text-brand-text-primary"
+            }`}
+          >
+            Smart 24h
+            {smartWalletsWithStats.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-accent"></span>
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setSidebarTab("all")}
+            className={`flex-1 py-1.5 rounded-sm text-center cursor-pointer transition font-bold uppercase tracking-wider ${
+              sidebarTab === "all"
+                ? "bg-brand-border-secondary text-brand-accent"
+                : "text-brand-text-secondary hover:text-brand-text-primary"
+            }`}
+          >
+            All ({wallets.length})
+          </button>
+        </div>
+
+        {/* Search input for ALL tab */}
+        {sidebarTab === "all" && (
+          <div className="mb-3">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search wallet label or address..."
+              className="w-full bg-brand-bg border border-brand-border-secondary text-brand-text-primary text-xs font-sans rounded-sm p-2 focus:outline-none focus:border-brand-accent/50 placeholder:text-brand-text-secondary"
+            />
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-brand-border">
-          <label className="text-[10px] font-mono text-brand-text-secondary uppercase tracking-widest block mb-2">
-            ALL DISCOVERED ENTITIES ({wallets.length})
-          </label>
-          <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-            {wallets.slice(0, 15).map((w) => (
-              <button
-                key={w.walletAddress}
-                onClick={() => onSelectWallet(w.walletAddress)}
-                className={`w-full text-left p-2 rounded-sm text-xs font-mono flex items-center justify-between transition ${
-                  selectedWallet?.walletAddress === w.walletAddress
-                    ? "bg-brand-border-secondary text-white font-bold"
-                    : "text-brand-text-secondary hover:bg-brand-hover hover:text-brand-text-primary"
-                }`}
-              >
-                <span>{w.walletLabel}</span>
-                <span className="text-[10px] text-brand-accent font-bold">
-                  {w.winRate}% WR
-                </span>
-              </button>
-            ))}
+        {/* Watchlist Tab View */}
+        {sidebarTab === "watchlist" && (
+          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            {bookmarkedWallets.length === 0 ? (
+              <div className="text-center py-8 bg-brand-hover/50 border border-brand-border-secondary rounded-sm border-dashed text-brand-text-secondary text-xs font-mono px-3">
+                No wallets bookmarked yet. Click the star icon on any profile to begin tracking!
+              </div>
+            ) : (
+              bookmarkedWallets.map((w) => {
+                const stats24h = getWallet24hStats(w.walletAddress);
+                return (
+                  <div
+                    key={w.walletAddress}
+                    onClick={() => onSelectWallet(w.walletAddress)}
+                    className={`p-3 rounded-sm border text-left cursor-pointer transition ${
+                      selectedWallet?.walletAddress === w.walletAddress
+                        ? "bg-brand-accent/5 border-brand-accent/30"
+                        : "bg-brand-hover/30 border-brand-border hover:border-brand-border-secondary"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-sans font-semibold text-xs text-white block flex items-center gap-1.5">
+                        {w.walletLabel}
+                        {stats24h.isSmart && (
+                          <span className="inline-flex items-center gap-0.5 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent text-[8px] px-1 rounded-sm uppercase font-bold animate-pulse">
+                            <Flame className="w-2.5 h-2.5 fill-brand-accent" /> SMART
+                          </span>
+                        )}
+                      </span>
+                      <Star className="w-3.5 h-3.5 text-brand-accent fill-brand-accent" />
+                    </div>
+                    <div className="flex items-center justify-between mt-1 text-[10px] font-mono">
+                      <span className="text-brand-text-secondary">
+                        {w.walletAddress.substring(0, 6)}...{w.walletAddress.slice(-4)}
+                      </span>
+                      <span className={w.realizedPnl >= 0 ? "text-brand-accent" : "text-brand-accent-red"}>
+                        PnL: {formatUsd(w.realizedPnl)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
-        </div>
+        )}
+
+        {/* Smart 24h Tab View */}
+        {sidebarTab === "smart" && (
+          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            {smartWalletsWithStats.length === 0 ? (
+              <div className="text-center py-10 bg-brand-hover/50 border border-brand-border-secondary rounded-sm border-dashed text-brand-text-secondary text-xs font-mono px-4">
+                <ShieldAlert className="w-8 h-8 mx-auto text-brand-text-secondary mb-2 opacity-60" />
+                No active smart wallets currently flagged. <br/>
+                <span className="text-[10px] text-brand-text-secondary block mt-1.5">
+                  Looking for active traders with a 70%+ win rate in the last 24 hours...
+                </span>
+              </div>
+            ) : (
+              smartWalletsWithStats.map(({ wallet: w, stats24h }) => (
+                <div
+                  key={w.walletAddress}
+                  onClick={() => onSelectWallet(w.walletAddress)}
+                  className={`p-3 rounded-sm border text-left cursor-pointer transition ${
+                    selectedWallet?.walletAddress === w.walletAddress
+                      ? "bg-brand-accent/5 border-brand-accent/30"
+                      : "bg-brand-hover/30 border-brand-border hover:border-brand-border-secondary"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-sans font-semibold text-xs text-white block flex items-center gap-1.5">
+                      {w.walletLabel}
+                      <span className="inline-flex items-center gap-0.5 bg-brand-accent/15 border border-brand-accent/40 text-brand-accent text-[9px] px-1.5 py-0.5 rounded-sm uppercase font-bold">
+                        <Flame className="w-2.5 h-2.5 fill-brand-accent text-brand-accent" /> {stats24h.winRate}% WR
+                      </span>
+                    </span>
+                    <Star className={`w-3.5 h-3.5 ${w.isBookmarked ? "text-brand-accent fill-brand-accent" : "text-brand-text-secondary"}`} />
+                  </div>
+                  <div className="flex items-center justify-between mt-2 text-[10px] font-mono">
+                    <span className="text-brand-text-secondary">
+                      {stats24h.tradesCount} trades (24h)
+                    </span>
+                    <span className={stats24h.pnl >= 0 ? "text-brand-accent" : "text-brand-accent-red"}>
+                      PnL: {formatUsd(stats24h.pnl)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* All Profiles Tab View */}
+        {sidebarTab === "all" && (
+          <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+            {wallets
+              .filter(
+                (w) =>
+                  w.walletLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  w.walletAddress.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+              .map((w) => {
+                const stats24h = getWallet24hStats(w.walletAddress);
+                return (
+                  <button
+                    key={w.walletAddress}
+                    onClick={() => onSelectWallet(w.walletAddress)}
+                    className={`w-full text-left p-2 rounded-sm text-xs font-mono flex items-center justify-between transition ${
+                      selectedWallet?.walletAddress === w.walletAddress
+                        ? "bg-brand-border-secondary text-white font-bold"
+                        : "text-brand-text-secondary hover:bg-brand-hover hover:text-brand-text-primary animate-fade"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="truncate">{w.walletLabel}</span>
+                      {stats24h.isSmart && (
+                        <Flame className="w-3.5 h-3.5 text-brand-accent fill-brand-accent flex-shrink-0 animate-pulse" />
+                      )}
+                    </span>
+                    <span className="text-[10px] text-brand-accent font-bold ml-2">
+                      {w.winRate}% WR
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        )}
       </div>
 
       {/* 2. Detailed Profiler analysis */}
@@ -156,6 +333,27 @@ export default function WalletProfiler({
                   </span>
                 </div>
               </div>
+
+              {/* Dynamic 24h Smart Watchlist Alert Flag Banner */}
+              {selectedStats24h?.isSmart && (
+                <div className="mt-4 p-3.5 bg-brand-accent/10 border border-brand-accent/30 rounded-sm flex items-start gap-3">
+                  <div className="p-1.5 bg-brand-accent/25 rounded-sm text-brand-accent animate-pulse mt-0.5">
+                    <Flame className="w-5 h-5 fill-brand-accent" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      SMART WATCHLIST TRADER DETECTED
+                    </h4>
+                    <p className="text-[11px] text-brand-text-secondary font-mono mt-1 leading-relaxed">
+                      This wallet is automatically flagged on our Smart Watchlist with a stellar{" "}
+                      <span className="text-brand-accent font-bold">{selectedStats24h.winRate}% win rate</span>{" "}
+                      across <span className="text-brand-accent font-bold">{selectedStats24h.tradesCount} positions</span>{" "}
+                      and <span className="text-brand-accent font-bold">{formatUsd(selectedStats24h.pnl)} realized profit</span>{" "}
+                      over the last 24 hours!
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Stats bento grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mt-5">
@@ -299,3 +497,4 @@ export default function WalletProfiler({
     </div>
   );
 }
+
