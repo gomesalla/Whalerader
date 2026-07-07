@@ -1,0 +1,6 @@
+{
+  "name": "Hyperliquid Whale Intelligence Dashboard",
+  "description": "An institutional-grade real-time dashboard for tracking whale positions, cluster trades, smart money scores, and AI-powered insights on Hyperliquid.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

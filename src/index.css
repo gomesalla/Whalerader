@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-bg: #050608;
+  --color-brand-container: #0A0C10;
+  --color-brand-border: #1C1F26;
+  --color-brand-text-primary: #E0E2E7;
+  --color-brand-text-secondary: #848E9C;
+  --color-brand-accent: #00FFA3;
+  --color-brand-accent-red: #FF3B69;
+  --color-brand-border-secondary: #2D3139;
+  --color-brand-hover: #161921;
+}
+
+/* Custom scrollbars for a highly polished trading terminal feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
